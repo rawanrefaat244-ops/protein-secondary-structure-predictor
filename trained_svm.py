@@ -14,7 +14,7 @@ from sklearn.metrics import accuracy_score
 # ==========================
 # CONFIG
 # ==========================
-PDB_FOLDER = "/home/lenovo555/protein_project/pdbs"  # Change path if needed
+PDB_FOLDER = "/mnt/d/WSL_projects/protein_project/pdbs"  # Change path if needed
 CHAIN_ID = "A"
 MIN_LEN = 30
 MAX_LEN = 400
