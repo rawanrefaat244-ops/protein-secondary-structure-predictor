@@ -141,17 +141,19 @@ def convert_labels_to_numeric(labels):
 def prepare_data():
     global processed_files, skipped_files
 
-    X_all = []
-    y_all = []
+    proteins = []
 
-    pdb_files = os.listdir(PDB_FOLDER)
+    pdb_files = sorted(os.listdir(PDB_FOLDER))
 
     for fname in pdb_files:
         if not fname.endswith(".pdb"):
             continue
 
         pdb_path = os.path.join(PDB_FOLDER, fname)
-        seq, labels = extract_dssp_q3_labels(pdb_path, chain_id=CHAIN_ID)
+
+        seq, labels = extract_dssp_q3_labels(
+            pdb_path, chain_id=CHAIN_ID
+            )
 
         if seq is None:
             skipped_files += 1
@@ -160,21 +162,18 @@ def prepare_data():
         processed_files += 1
 
         numeric_labels = convert_labels_to_numeric(labels)
-        X_win, y_win = sliding_window_encode(seq, numeric_labels)
 
-        X_all.extend(X_win)
-        y_all.extend(y_win)
+        proteins.append((fname, seq, numeric_labels))
 
-    if len(X_all) == 0:
-        print("No valid data found.")
-        return None, None
+    if len(proteins) == 0:
+        print("No enough valid proteins.")
+        return None
 
     print(f"✔ Successfully processed PDB files: {processed_files}")
     print(f"✔ Skipped PDB files: {skipped_files}")
-    print(f"✔ Total windows: {len(y_all)}")
-    print(f"✔ Feature vector size: {len(X_all[0])}")
+    print(f"✔ Total proteins: {len(proteins)}")
 
-    return np.array(X_all), np.array(y_all)
+    return proteins
 
 
 # ==========================
@@ -182,10 +181,40 @@ def prepare_data():
 # ==========================
 import joblib
 
-def train_model(X, y):
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+def train_model(proteins):
+
+    # Split complete proteins before sliding window
+    train_proteins, test_proteins = train_test_split(
+        proteins,
+        test_size=0.2, 
+        random_state=42
     )
+
+    X_train, y_train = [], []
+    X_test, y_test = [], []
+
+    # Create windows for training data
+    for fname, seq, labels in train_proteins:
+        X_win, y_win = sliding_window_encode(seq, labels)
+        X_train.extend(X_win)
+        y_train.extend(y_win)
+
+    # Create windows for testing data
+    for fname, seq, labels in test_proteins:
+        X_win, y_win = sliding_window_encode(seq, labels)
+        X_test.extend(X_win)
+        y_test.extend(y_win)
+
+    X_train = np.array(X_train)
+    y_train = np.array(y_train)
+
+    X_test = np.array(X_test)
+    y_test = np.array(y_test)
+
+    print(f"Train proteins: {len(train_proteins)}")
+    print(f"Test proteins: {len(test_proteins)}")
+    print(f"Train windows: {len(X_train)}")
+    print(f"Test windows: {len(X_test)}")
 
     model = SVC(
         kernel="rbf",
@@ -202,7 +231,8 @@ def train_model(X, y):
 
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
-    print(f"SVM Accuracy (Sliding Window): {acc * 100:.2f}%")
+
+    print(f"SVM Accuracy: {acc * 100:.2f}%")
 
     return model
 
@@ -211,12 +241,12 @@ def train_model(X, y):
 # ==========================
 def main():
     # Prepare the data
-    X, y = prepare_data()
-    if X is None or y is None:
+    proteins = prepare_data()
+    if proteins is None:
         return
 
     # Train the model
-    train_model(X, y)
+    train_model(proteins)
 
 
 if __name__ == "__main__":

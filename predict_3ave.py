@@ -113,9 +113,11 @@ def extract_true_dssp_q3(pdb_path=PDB_PATH, chain_id=CHAIN_ID):
 
 
 def q3_score(true_labels, pred_labels):
-    n = min(len(true_labels), len(pred_labels))
-    correct = sum(true_labels[i] == pred_labels[i] for i in range(n))
-    return correct / n
+    if len(true_labels) != len(pred_labels):
+        raise ValueError("True and predicted lengths do not match.")
+
+    correct = sum(t == p for t, p in zip(true_labels, pred_labels))
+    return correct / len(true_labels)
 
 def clean_jpred_prediction(jpred_raw):
 
