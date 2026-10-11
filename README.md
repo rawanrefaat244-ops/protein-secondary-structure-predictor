@@ -28,20 +28,20 @@ The project has two main scripts:
 
 ### 1. `trained_svm.py`
 
-This script trains an SVM model for secondary structure prediction.
+This script trains an SVM model for protein secondary structure prediction.
 
 It performs the following steps:
 
-1. Loads external PDB files from a training folder.
-2. Extracts chain A residues from each PDB file.
-3. Uses DSSP to obtain experimental secondary structure labels.
-4. Converts DSSP 8-state labels into Q3 labels:
-   - Helix-like: `H`, `G`, `I` → `H`
-   - Beta-like: `E`, `B` → `E`
-   - Coil-like: `T`, `S`, `-` → `C`
-5. Encodes each amino acid using a sliding-window approach.
-6. Trains a Support Vector Machine classifier.
-7. Saves the trained model as `svm_q3_model.pkl`.
+1. Loads external PDB structures from the training folder.
+2. Extracts amino acid sequences and DSSP secondary structure labels.
+3. Converts DSSP 8-state labels into three Q3 classes (H, E, C).
+4. Splits complete proteins into training (80%) and testing (20%) sets.
+5. Independently generates sliding windows for each set.
+6. Applies one-hot encoding to produce 147-dimensional feature vectors.
+7. Trains an RBF-SVM classifier and evaluates its performance.
+8. Saves the trained model as `svm_q3_model.pkl`.
+
+**Important:** The split is performed at the protein level before sliding-window generation to prevent overlapping windows from the same protein appearing in both training and testing sets.
 
 ### 2. `predict_3ave.py`
 
@@ -162,10 +162,13 @@ Example training output:
 ```text
 ✔ Successfully processed PDB files: 83
 ✔ Skipped PDB files: 17
-✔ Total windows: 17148
-✔ Feature vector size: 147
+✔ Total proteins: 83
+Train proteins: 66
+Test proteins: 17
+Train windows: 13599
+Test windows: 3549
 ✔ Trained model saved as svm_q3_model.pkl
-SVM Accuracy (Sliding Window): 81.49%
+SVM Accuracy: 84.93%
 ```
 
 ### 4. Predict secondary structure for 3AVE
@@ -227,12 +230,46 @@ DSSP originally provides 8-state secondary structure labels. In this project, th
 
 ## Results
 
-| Model / Method | Q3 Score |
+### Internal Evaluation
+
+Two splitting strategies were evaluated while keeping the SVM hyperparameters unchanged.
+
+| Evaluation Method | Q3 Accuracy |
 |---|---:|
-| Custom SVM model | 72.51% |
+| Original random window-level split | 81.49% |
+| Updated protein-level split | 84.93% |
+
+The original pipeline generated overlapping sliding windows before randomly splitting the resulting samples into training and testing sets.
+
+This allowed highly overlapping windows from the same protein to appear in both sets, potentially producing an overly optimistic evaluation.
+
+To address this issue, the pipeline was updated to split complete protein sequences before applying sliding-window encoding.
+
+The updated model was trained on 66 proteins and evaluated on 17 held-out proteins.
+
+**Note:** The internal test sets differ between the two experiments. Therefore, the increase from 81.49% to 84.93% should not be interpreted as a direct improvement in generalization performance.
+
+### External Evaluation on 3AVE
+
+| Method | Q3 Accuracy |
+|---|---:|
+| Original SVM | 72.51% |
+| Updated SVM | 72.51% |
 | JPred baseline | 71.09% |
 
-The custom SVM model achieved a slightly higher Q3 score than the JPred baseline on the 3AVE test case.
+Both SVM versions correctly predicted 153 out of 211 residues in 3AVE.
+
+Although the original and updated models produced different residue-level predictions, their overall Q3 accuracy remained unchanged.
+
+The updated SVM achieved a slightly higher Q3 score than the JPred baseline on this test protein.
+
+### Key Finding
+
+The primary improvement was methodological rather than predictive.
+
+Splitting at the protein level prevents windows from the same protein from appearing in both training and testing sets, providing a more appropriate evaluation of performance on held-out proteins.
+
+However, sequence similarity between different proteins was not explicitly controlled.
 
 ## Files Required to Run Prediction
 
@@ -259,6 +296,8 @@ Current limitations include:
 - The model performance depends heavily on the quality and diversity of the training PDB dataset.
 - The current evaluation focuses on one test structure: 3AVE.
 - The training dataset path is currently configured locally and should be updated before running on another machine.
+- Although the protein-level split prevents overlapping windows from the same protein appearing in both sets, homologous or highly similar proteins may still be distributed across training and testing sets.
+- The model uses a fixed local window of seven amino acids, limiting its ability to capture long-range sequence dependencies.
 
 ## Future Improvements
 
